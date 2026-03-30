@@ -10,6 +10,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install PHPCS
+        run: |
+          composer global require "squizlabs/php_codesniffer=*"
+          echo "$HOME/.composer/vendor/bin" >> $GITHUB_PATH
+
       - name: Check PHP syntax
         run: |
           find . -name "*.php" -exec php -l {} \;
+
+      - name: Run PHPCS (PSR12)
+        run: phpcs --standard=PSR12 .
