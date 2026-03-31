@@ -37,17 +37,14 @@ jobs:
 
       - name: Install PHPCS and WordPress Coding Standards
         run: |
+          composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer global require \
             squizlabs/php_codesniffer \
             wp-coding-standards/wpcs \
             phpcsstandards/phpcsutils \
             phpcsstandards/phpcsextra
-          phpcs --config-set installed_paths \
-            ~/.composer/vendor/wp-coding-standards/wpcs,\
-            ~/.composer/vendor/phpcsstandards/phpcsutils,\
-            ~/.composer/vendor/phpcsstandards/phpcsextra
 
-      - name: Check PHP syntax (fail-fast)
+      - name: Check PHP syntax
         run: find . -name "*.php" ! -path "./vendor/*" -exec php -l {} \; | grep -v "^No syntax errors"
 
       - name: Run PHPCS
