@@ -1,23 +1,71 @@
 name: PHP Lint
 
-on: [push]
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'wp-content/themes/child-theme/**'
+      - '.github/workflows/lint.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'wp-content/themes/child-theme/**'
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wp-content/themes/child-theme
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install PHPCS
-        run: |
-          composer global require "squizlabs/php_codesniffer=*"
-          echo "$HOME/.composer/vendor/bin" >> $GITHUB_PATH
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer, cs2pr
 
-      - name: Check PHP syntax
-        run: |
-          find . -name "*.php" -exec php -l {} \;
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-
 
-      - name: Run PHPCS (PSR12)
-        run: phpcs --standard=PSR12 . || true
+      - name: Install PHPCS and WordPress Coding Standards
+        run: |
+          composer global require \
+            squizlabs/php_codesniffer \
+            wp-coding-standards/wpcs \
+            phpcsstandards/phpcsutils \
+            phpcsstandards/phpcsextra
+          phpcs --config-set installed_paths \
+            ~/.composer/vendor/wp-coding-standards/wpcs,\
+            ~/.composer/vendor/phpcsstandards/phpcsutils,\
+            ~/.composer/vendor/phpcsstandards/phpcsextra
+
+      - name: Check PHP syntax (fail-fast)
+        run: find . -name "*.php" ! -path "./vendor/*" -exec php -l {} \; | grep -v "^No syntax errors"
+
+      - name: Run PHPCS
+        run: |
+          phpcs \
+            --standard=WordPress \
+            --extensions=php \
+            --ignore=vendor/,node_modules/ \
+            --report=checkstyle \
+            --report-file=phpcs-report.xml \
+            . || true
+
+      - name: Annotate violations via cs2pr
+        run: cs2pr phpcs-report.xml
+
+      - name: Fail if violations found
+        run: |
+          if grep -q '<error' phpcs-report.xml; then
+            echo "PHPCS errors found. See annotations above."
+            exit 1
+          fi
