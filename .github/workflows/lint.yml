@@ -44,6 +44,11 @@ jobs:
             phpcsstandards/phpcsutils \
             phpcsstandards/phpcsextra
 
+         phpcs --config-set installed_paths \
+            ~/.composer/vendor/wp-coding-standards/wpcs,\
+            ~/.composer/vendor/phpcsstandards/phpcsutils,\
+            ~/.composer/vendor/phpcsstandards/phpcsextra
+
       - name: Check PHP syntax
         run: |
           errors=$(find . -name "*.php" ! -path "./vendor/*" -exec php -l {} \; | grep -v "^No syntax errors" || true)
