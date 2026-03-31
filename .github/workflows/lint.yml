@@ -14,45 +14,52 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: wp-content/themes/child-theme
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@cf4cade2721270509d5b1c766ab3549210a39a2 # v2.33.0
         with:
           php-version: '8.2'
           tools: composer, cs2pr
+          coverage: none
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ~/.composer/cache
-          key: composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-
+          key: composer-phpcs-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            composer-phpcs-
+            composer-
 
       - name: Install PHPCS and WordPress Coding Standards
         run: |
-          composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global config --no-plugins \
+            allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer global require \
             squizlabs/php_codesniffer \
             wp-coding-standards/wpcs \
             phpcsstandards/phpcsutils \
             phpcsstandards/phpcsextra
-
-         phpcs --config-set installed_paths \
-            ~/.composer/vendor/wp-coding-standards/wpcs,\
-            ~/.composer/vendor/phpcsstandards/phpcsutils,\
-            ~/.composer/vendor/phpcsstandards/phpcsextra
+          echo "PHPCS version: $(phpcs --version)"
+          echo "Installed standards: $(phpcs -i)"
 
       - name: Check PHP syntax
         run: |
-          errors=$(find . -name "*.php" ! -path "./vendor/*" -exec php -l {} \; | grep -v "^No syntax errors" || true)
+          echo "Scanning for PHP syntax errors..."
+          errors=$(find . -name "*.php" \
+            ! -path "./vendor/*" \
+            ! -path "./node_modules/*" \
+            -exec php -l {} \; | grep -v "^No syntax errors" || true)
           if [ -n "$errors" ]; then
+            echo "PHP syntax errors found:"
             echo "$errors"
             exit 1
           fi
@@ -67,6 +74,15 @@ jobs:
             --report=checkstyle \
             --report-file=phpcs-report.xml \
             . || true
+          echo "PHPCS scan complete."
+
+      - name: Verify PHPCS report exists
+        run: |
+          if [ ! -f phpcs-report.xml ]; then
+            echo "phpcs-report.xml was not generated. PHPCS may have crashed."
+            exit 1
+          fi
+          echo "Report file found: phpcs-report.xml"
 
       - name: Annotate violations via cs2pr
         run: cs2pr phpcs-report.xml
@@ -74,6 +90,16 @@ jobs:
       - name: Fail if violations found
         run: |
           if grep -q '<error' phpcs-report.xml; then
-            echo "PHPCS errors found. See annotations above."
+            error_count=$(grep -c '<error' phpcs-report.xml)
+            echo "PHPCS found $error_count error(s). See annotations above."
             exit 1
           fi
+          echo "PHPCS passed with no errors."
+
+      - name: Upload PHPCS report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phpcs-report
+          path: wp-content/themes/child-theme/phpcs-report.xml
+          retention-days: 7
