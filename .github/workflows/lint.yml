@@ -45,7 +45,13 @@ jobs:
             phpcsstandards/phpcsextra
 
       - name: Check PHP syntax
-        run: find . -name "*.php" ! -path "./vendor/*" -exec php -l {} \; | grep -v "^No syntax errors"
+        run: |
+          errors=$(find . -name "*.php" ! -path "./vendor/*" -exec php -l {} \; | grep -v "^No syntax errors" || true)
+          if [ -n "$errors" ]; then
+            echo "$errors"
+            exit 1
+          fi
+          echo "No PHP syntax errors found."
 
       - name: Run PHPCS
         run: |
